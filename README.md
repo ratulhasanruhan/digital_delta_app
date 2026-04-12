@@ -1,17 +1,12 @@
-# digital_delta_app
+# Digital Delta — app
 
-A new Flutter project.
+Flutter field client: works offline; can hit the Go hub when you have a network.
 
-## Getting Started
+```bash
+flutter pub get
+flutter run
+```
 
-This project is a starting point for a Flutter application.
+Hub (optional): `cd ../digital_delta_server && make dev` — use your LAN IP from a device; Android emulator often uses `10.0.2.2` instead of `localhost`.
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+More detail (modules, judging): see `../README.md`.
