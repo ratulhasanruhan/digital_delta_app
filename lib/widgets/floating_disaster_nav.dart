@@ -27,11 +27,16 @@ class FloatingDisasterNav extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 0, 16, 12 + bottom * 0.25),
       child: Material(
-        color: cs.surface,
+        color: cs.surface.withValues(alpha: 0.96),
         elevation: 10,
         shadowColor: cs.shadow.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(30),
+        clipBehavior: Clip.antiAlias,
         surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(30),
+          side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.4)),
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
           child: Row(
@@ -73,6 +78,13 @@ class _NavCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final pillColor = selected
+        ? Color.alphaBlend(
+            cs.primary.withValues(alpha: 0.14),
+            cs.primaryContainer.withValues(alpha: 0.75),
+          )
+        : Colors.transparent;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(22),
@@ -81,16 +93,25 @@ class _NavCell extends StatelessWidget {
         curve: Curves.easeOutCubic,
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? cs.primaryContainer.withValues(alpha: 0.65) : Colors.transparent,
+          color: pillColor,
           borderRadius: BorderRadius.circular(22),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              spec.icon,
-              size: 26,
-              color: selected ? cs.primary : cs.onSurfaceVariant,
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: selected ? cs.primary.withValues(alpha: 0.12) : Colors.transparent,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                spec.icon,
+                size: selected ? 24 : 22,
+                color: selected ? cs.primary : cs.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
@@ -99,7 +120,7 @@ class _NavCell extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.dmSans(
                 fontSize: 11,
-                fontWeight: FontWeight.w700,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                 letterSpacing: -0.2,
                 color: selected ? cs.primary : cs.onSurfaceVariant,
               ),
