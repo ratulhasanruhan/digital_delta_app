@@ -1,48 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:onnxruntime/onnxruntime.dart';
-import 'package:provider/provider.dart';
+import 'package:get/get.dart';
 
 import 'app/app_theme.dart';
-import 'app/session_controller.dart';
-import 'core/rbac.dart';
-import 'app/sync_status_controller.dart';
-import 'data/supply_repository.dart';
-import 'features/identity/services/identity_service.dart';
-import 'features/mesh/ble_mesh_controller.dart';
-import 'features/mesh/relay_service.dart';
-import 'features/pod/pod_service.dart';
-import 'ui/app_entry.dart';
+import 'app/routes/app_pages.dart';
+import 'app/routes/app_routes.dart';
+import 'presentation/controllers/auth_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  OrtEnv.instance.init();
-  final repository = SupplyRepository();
-  await repository.init();
-  final identity = IdentityService(repository: repository);
-  await identity.init();
-  repository.bindAccessChecker((p) => identity.role.can(p));
-  final sync = SyncStatusController();
-  final relay = MeshRelayService(repository: repository);
-  await relay.hydrateFromDisk();
-  final pod = PodService(identity, repository);
-  final bleMesh = BleMeshController(repository: repository);
-  final session = SessionController(identity);
-  await session.load();
-
-  runApp(
-    MultiProvider(
-      providers: [
-        Provider<SupplyRepository>.value(value: repository),
-        ChangeNotifierProvider<IdentityService>.value(value: identity),
-        ChangeNotifierProvider<SessionController>.value(value: session),
-        ChangeNotifierProvider<SyncStatusController>.value(value: sync),
-        ChangeNotifierProvider<MeshRelayService>.value(value: relay),
-        ChangeNotifierProvider<BleMeshController>.value(value: bleMesh),
-        Provider<PodService>.value(value: pod),
-      ],
-      child: const DigitalDeltaApp(),
-    ),
-  );
+  final auth = AuthController();
+  await auth.hydrateBeforeFirstFrame();
+  Get.put<AuthController>(auth, permanent: true);
+  runApp(const DigitalDeltaApp());
 }
 
 class DigitalDeltaApp extends StatelessWidget {
@@ -50,13 +19,16 @@ class DigitalDeltaApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    final auth = Get.find<AuthController>();
+    return GetMaterialApp(
       title: 'Digital Delta',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.system,
-      home: const AppEntry(),
+      initialRoute: auth.isLoggedIn.value ? AppRoutes.home : AppRoutes.login,
+      getPages: AppPages.pages,
+      defaultTransition: Transition.cupertino,
     );
   }
 }

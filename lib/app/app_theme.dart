@@ -6,6 +6,10 @@ abstract final class AppTheme {
   /// Deep green — readable on light surfaces, pairs well with M3 tonal surfaces.
   static const Color brandGreen = Color(0xFF15803D);
 
+  /// Hero gradients / flood-response accents (water + depth).
+  static const Color floodDeep = Color(0xFF0C4A6E);
+  static const Color waterAccent = Color(0xFF0EA5E9);
+
   static ThemeData light() {
     final base = ThemeData(
       useMaterial3: true,
