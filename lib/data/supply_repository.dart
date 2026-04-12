@@ -47,7 +47,7 @@ class SupplyRepository {
     final path = p.join(dir.path, 'digital_delta.db');
     _db = await openDatabase(
       path,
-      version: 3,
+      version: 5,
       onCreate: (db, version) async {
         await _createSchemaV2(db);
         await _createPubkeyLedger(db);
@@ -81,6 +81,23 @@ CREATE TABLE IF NOT EXISTS relay_outbox (
         }
         if (oldVersion < 3) {
           await _createPubkeyLedger(db);
+        }
+        if (oldVersion < 4) {
+          await db.execute('ALTER TABLE orset_add ADD COLUMN op_clock_json TEXT');
+          await db.execute('ALTER TABLE orset_remove ADD COLUMN op_clock_json TEXT');
+          final rows = await db.query('meta', where: 'k = ?', whereArgs: [_kMetaClock]);
+          final fallback = rows.isEmpty ? '{}' : (rows.first['v'] as String? ?? '{}');
+          await db.rawUpdate(
+            'UPDATE orset_add SET op_clock_json = ? WHERE op_clock_json IS NULL',
+            [fallback],
+          );
+          await db.rawUpdate(
+            'UPDATE orset_remove SET op_clock_json = ? WHERE op_clock_json IS NULL',
+            [fallback],
+          );
+        }
+        if (oldVersion < 5) {
+          // M3 — relay rows may use status at_relay / at_recipient (v4 only had pending).
         }
       },
     );
@@ -117,12 +134,14 @@ CREATE TABLE orset_add (
   description TEXT NOT NULL,
   quantity INTEGER NOT NULL,
   priority INTEGER NOT NULL,
-  location_node_id TEXT NOT NULL
+  location_node_id TEXT NOT NULL,
+  op_clock_json TEXT NOT NULL DEFAULT '{}'
 )''');
     await db.execute('''
 CREATE TABLE orset_remove (
   element_id TEXT NOT NULL,
   unique_tag TEXT NOT NULL,
+  op_clock_json TEXT NOT NULL DEFAULT '{}',
   PRIMARY KEY (element_id, unique_tag)
 )''');
     await db.execute('''
@@ -201,6 +220,7 @@ CREATE TABLE relay_outbox (
       'quantity': quantity,
       'priority': priority.protoValue,
       'location_node_id': locationNodeId,
+      'op_clock_json': clock.toJsonString(),
     });
     await _saveClock(clock);
   }
@@ -211,7 +231,11 @@ CREATE TABLE relay_outbox (
     final clock = (await currentClock()).tick(replicaId);
     await _database.insert(
       'orset_remove',
-      {'element_id': elementId, 'unique_tag': uniqueTag},
+      {
+        'element_id': elementId,
+        'unique_tag': uniqueTag,
+        'op_clock_json': clock.toJsonString(),
+      },
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
     await _saveClock(clock);
@@ -220,7 +244,8 @@ CREATE TABLE relay_outbox (
   /// Merged visible supply lines (adds \ removes).
   Future<List<SupplyLine>> visibleLines() async {
     final rows = await _database.rawQuery('''
-SELECT a.element_id, a.unique_tag, a.sku, a.description, a.quantity, a.priority, a.location_node_id
+SELECT a.element_id, a.unique_tag, a.sku, a.description, a.quantity, a.priority, a.location_node_id,
+       a.op_clock_json
 FROM orset_add a
 WHERE NOT EXISTS (
   SELECT 1 FROM orset_remove r
@@ -238,9 +263,19 @@ ORDER BY a.unique_tag
             quantity: r['quantity']! as int,
             priority: CargoPriority.fromInt(r['priority']! as int),
             locationNodeId: r['location_node_id']! as String,
+            causalClock: _parseOpClock(r['op_clock_json'] as String?),
           ),
         )
         .toList();
+  }
+
+  VectorClock? _parseOpClock(String? raw) {
+    if (raw == null || raw.isEmpty || raw == '{}') return null;
+    try {
+      return VectorClock.fromJsonString(raw);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Merge remote OR-Set + clock (for future sync). Pure DB append + clock merge.
@@ -288,9 +323,8 @@ ORDER BY a.unique_tag
   Future<pb.VectorClock> currentProtoClock() async =>
       toProtoClock(await currentClock());
 
-  /// Full OR-Set state as `CrdtMutationEnvelope` list (delta-sync can subset later).
+  /// Full OR-Set state as `CrdtMutationEnvelope` list — each envelope carries **this op’s** vector clock (M2.2).
   Future<List<crdt_pb.CrdtMutationEnvelope>> buildExportEnvelopes() async {
-    final vc = await currentProtoClock();
     final origin = pb.ReplicaId()..value = replicaId;
     final adds = await _database.query('orset_add');
     final removes = await _database.query('orset_remove');
@@ -314,12 +348,13 @@ ORDER BY a.unique_tag
           item: item,
           uniqueTag: row['unique_tag']! as String,
         );
+      final opVc = _parseOpClock(row['op_clock_json'] as String?) ?? await currentClock();
       out.add(
         crdt_pb.CrdtMutationEnvelope(
           collectionId: 'supply_inventory',
           kind: crdt_pb.CrdtKind.CRDT_KIND_OR_SET,
           origin: origin,
-          vectorClock: vc,
+          vectorClock: toProtoClock(opVc),
           payload: op.writeToBuffer(),
         ),
       );
@@ -330,17 +365,35 @@ ORDER BY a.unique_tag
           id: sup_pb.SupplyItemId()..uuid = row['element_id']! as String,
           uniqueTag: row['unique_tag']! as String,
         );
+      final opVc = _parseOpClock(row['op_clock_json'] as String?) ?? await currentClock();
       out.add(
         crdt_pb.CrdtMutationEnvelope(
           collectionId: 'supply_inventory',
           kind: crdt_pb.CrdtKind.CRDT_KIND_OR_SET,
           origin: origin,
-          vectorClock: vc,
+          vectorClock: toProtoClock(opVc),
           payload: op.writeToBuffer(),
         ),
       );
     }
     return out;
+  }
+
+  /// M2.4 — delta: ops whose causal time is **not** already dominated by [peerWatermark].
+  Future<sync_pb.SyncDeltaChunk> buildDeltaChunkSince(pb.VectorClock peerWatermark) async {
+    final since = fromProtoClock(peerWatermark);
+    final all = await buildExportEnvelopes();
+    final filtered = <crdt_pb.CrdtMutationEnvelope>[];
+    for (final env in all) {
+      if (!env.hasVectorClock()) continue;
+      final opVc = fromProtoClock(env.vectorClock);
+      if (!since.dominates(opVc)) {
+        filtered.add(env);
+      }
+    }
+    return sync_pb.SyncDeltaChunk()
+      ..sequence = 1
+      ..mutations.addAll(filtered);
   }
 
   /// Apply remote protobuf mutations (OR-Set) and merge vector clocks.
@@ -362,6 +415,9 @@ ORDER BY a.unique_tag
         final pri = item.hasSla()
             ? protoCargoToDart(item.sla.priority)
             : CargoPriority.p2;
+        final opClock = env.hasVectorClock()
+            ? fromProtoClock(env.vectorClock).toJsonString()
+            : (await currentClock()).toJsonString();
         await _database.insert(
           'orset_add',
           {
@@ -372,16 +428,21 @@ ORDER BY a.unique_tag
             'quantity': item.quantity.toInt(),
             'priority': pri.protoValue,
             'location_node_id': item.currentLocationNodeId,
+            'op_clock_json': opClock,
           },
           conflictAlgorithm: ConflictAlgorithm.ignore,
         );
       } else if (op.hasRemove()) {
         final r = op.remove;
+        final opClock = env.hasVectorClock()
+            ? fromProtoClock(env.vectorClock).toJsonString()
+            : (await currentClock()).toJsonString();
         await _database.insert(
           'orset_remove',
           {
             'element_id': r.id.uuid,
             'unique_tag': r.uniqueTag,
+            'op_clock_json': opClock,
           },
           conflictAlgorithm: ConflictAlgorithm.ignore,
         );
@@ -401,9 +462,11 @@ ORDER BY a.unique_tag
       ..mutations.addAll(envs);
   }
 
-  /// M2.4 — protobuf delta size for bandwidth demo (typically under 10 KB).
-  Future<int> estimateDeltaChunkBytes() async {
-    final chunk = await buildExportChunk();
+  /// M2.4 — protobuf delta size for bandwidth demo (typically under 10 KB when peer is caught up).
+  Future<int> estimateDeltaChunkBytes({pb.VectorClock? sincePeerWatermark}) async {
+    final chunk = sincePeerWatermark != null
+        ? await buildDeltaChunkSince(sincePeerWatermark)
+        : await buildExportChunk();
     return chunk.writeToBuffer().lengthInBytes;
   }
 
@@ -587,7 +650,7 @@ ORDER BY a.unique_tag
     required int ttlSeconds,
     required int hopCount,
   }) async {
-    _require(Permission.executeSync);
+    _require(Permission.readSupply);
     await _database.insert('relay_outbox', {
       'id': id,
       'dest_fingerprint': destFingerprint,
@@ -599,15 +662,32 @@ ORDER BY a.unique_tag
     });
   }
 
+  /// All in-flight relay frames (M3.1 multi-hop: pending → at_relay → at_recipient).
   Future<List<Map<String, Object?>>> relayPendingRows() async {
     return _database.query(
       'relay_outbox',
-      where: 'status = ?',
-      whereArgs: ['pending'],
+      where: 'status IN (?, ?, ?)',
+      whereArgs: ['pending', 'at_relay', 'at_recipient'],
+      orderBy: 'created_at ASC',
+    );
+  }
+
+  Future<void> relayUpdateProgress({
+    required String id,
+    required String status,
+    required int hopCount,
+  }) async {
+    _require(Permission.readSupply);
+    await _database.update(
+      'relay_outbox',
+      {'status': status, 'hop_count': hopCount},
+      where: 'id = ?',
+      whereArgs: [id],
     );
   }
 
   Future<void> relayDelete(String id) async {
+    _require(Permission.readSupply);
     await _database.delete('relay_outbox', where: 'id = ?', whereArgs: [id]);
   }
 }

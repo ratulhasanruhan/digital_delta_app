@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../../../app/app_theme.dart';
+import '../../../app/sync_status_controller.dart';
 import '../../../app/ui_tokens.dart';
+import '../../../features/identity/ui/identity_hub_page.dart';
+import 'field_modules_grid.dart';
+import '../../../widgets/connection_status_bar.dart';
 import '../../controllers/auth_controller.dart';
 
 /// Situation room: sync strip, KPIs, river level, activity feed, quick actions.
@@ -15,19 +20,25 @@ class DashboardView extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final auth = Get.find<AuthController>();
 
-    return Obx(
-      () {
-        final phone = auth.phoneDisplay.value;
-        return CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            SliverPadding(
-              padding: UiTokens.pageInsets,
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  _SyncStatusStrip(cs: cs),
-                  const SizedBox(height: 16),
-                  _WelcomeCard(phone: phone, cs: cs),
+    return Consumer<SyncStatusController>(
+      builder: (context, sync, _) {
+        return Obx(
+          () {
+            final phone = auth.phoneDisplay.value;
+            return CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                SliverPadding(
+                  padding: UiTokens.pageInsets,
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      ConnectionStatusBar(controller: sync),
+                      const SizedBox(height: 16),
+                      _WelcomeCard(phone: phone, cs: cs, sync: sync),
+                  const SizedBox(height: 12),
+                  _SecurityAuditTile(cs: cs),
+                  const SizedBox(height: UiTokens.sectionGap),
+                  const FieldModulesGrid(),
                   const SizedBox(height: UiTokens.sectionGap),
                   Text(
                     'Live priorities',
@@ -99,7 +110,7 @@ class DashboardView extends StatelessWidget {
                   const _ActivityTile(
                     icon: Icons.emergency_rounded,
                     title: 'Medevac request drafted',
-                    subtitle: 'Field hospital · pending coordinator',
+                    subtitle: 'Coordinator queue · awaiting air slot',
                     time: '18m ago',
                   ),
                   const SizedBox(height: 8),
@@ -109,61 +120,16 @@ class DashboardView extends StatelessWidget {
                     subtitle: '42 images · stored on device',
                     time: '1h ago',
                   ),
-                  const SizedBox(height: UiTokens.sectionGap),
-                  _ActionRow(cs: cs),
+                  const SizedBox(height: 24),
                   const SizedBox(height: 32),
-                ]),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _SyncStatusStrip extends StatelessWidget {
-  const _SyncStatusStrip({required this.cs});
-
-  final ColorScheme cs;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.wifi_off_rounded, color: cs.tertiary, size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Sync paused · offline',
-                  style: GoogleFonts.dmSans(fontWeight: FontWeight.w700, fontSize: 14),
-                ),
-                Text(
-                  '12 actions queued · 0 conflicts',
-                  style: GoogleFonts.dmSans(
-                    fontSize: 12,
-                    color: cs.onSurfaceVariant,
+                    ]),
                   ),
                 ),
               ],
-            ),
-          ),
-          TextButton(
-            onPressed: () {},
-            child: Text('Details', style: GoogleFonts.dmSans(fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -303,14 +269,79 @@ class _ActivityTile extends StatelessWidget {
   }
 }
 
-class _WelcomeCard extends StatelessWidget {
-  const _WelcomeCard({this.phone, required this.cs});
+class _SecurityAuditTile extends StatelessWidget {
+  const _SecurityAuditTile({required this.cs});
 
-  final String? phone;
   final ColorScheme cs;
 
   @override
   Widget build(BuildContext context) {
+    return Material(
+      color: cs.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          Navigator.of(context).push<void>(
+            MaterialPageRoute<void>(
+              builder: (context) => Scaffold(
+                appBar: AppBar(
+                  title: Text('Security & audit', style: GoogleFonts.dmSans(fontWeight: FontWeight.w700)),
+                ),
+                body: const IdentityHubPage(),
+              ),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Icon(Icons.shield_outlined, color: cs.primary, size: 26),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Security & audit trail',
+                      style: GoogleFonts.dmSans(fontWeight: FontWeight.w800, fontSize: 15),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'TOTP, keys, hash-chained login log — tap to open',
+                      style: GoogleFonts.dmSans(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WelcomeCard extends StatelessWidget {
+  const _WelcomeCard({
+    this.phone,
+    required this.cs,
+    required this.sync,
+  });
+
+  final String? phone;
+  final ColorScheme cs;
+  final SyncStatusController sync;
+
+  @override
+  Widget build(BuildContext context) {
+    final online = !sync.isOffline;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -345,10 +376,14 @@ class _WelcomeCard extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.cloud_off_rounded, size: 16, color: Colors.white.withValues(alpha: 0.95)),
+                    Icon(
+                      online ? Icons.wifi_rounded : Icons.cloud_off_rounded,
+                      size: 16,
+                      color: Colors.white.withValues(alpha: 0.95),
+                    ),
                     const SizedBox(width: 6),
                     Text(
-                      'Offline mode',
+                      online ? 'Network online' : 'Offline mode',
                       style: GoogleFonts.dmSans(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -373,8 +408,12 @@ class _WelcomeCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             phone != null
-                ? 'Signed in as $phone · Changes queue on-device until sync.'
-                : 'Queue actions on-device until connectivity is back.',
+                ? (online
+                    ? 'Signed in as $phone · Network available — use Supplies for peer sync (central admin is separate).'
+                    : 'Signed in as $phone · Changes stay on-device until you’re online or sync with a peer.')
+                : (online
+                    ? 'Network available — open Supplies to sync with another device.'
+                    : 'Queue actions on-device until connectivity is back.'),
             style: GoogleFonts.dmSans(
               fontSize: 14,
               height: 1.45,
@@ -448,31 +487,3 @@ class _StatTile extends StatelessWidget {
   }
 }
 
-class _ActionRow extends StatelessWidget {
-  const _ActionRow({required this.cs});
-
-  final ColorScheme cs;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: FilledButton.tonalIcon(
-            onPressed: () {},
-            icon: const Icon(Icons.map_rounded, size: 20),
-            label: Text('Evacuation map', style: GoogleFonts.dmSans(fontWeight: FontWeight.w700)),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: FilledButton.icon(
-            onPressed: () {},
-            icon: const Icon(Icons.campaign_rounded, size: 20),
-            label: Text('Broadcast', style: GoogleFonts.dmSans(fontWeight: FontWeight.w700)),
-          ),
-        ),
-      ],
-    );
-  }
-}

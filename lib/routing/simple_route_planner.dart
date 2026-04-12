@@ -61,6 +61,7 @@ PathResult? shortestPathMinutes({
     if (u == goalId) break;
     done.add(u);
     for (final e in adj[u] ?? const <AdjEdge>[]) {
+      if (e.isFlooded) continue;
       final alt = best + e.weight;
       if (alt < (dist[e.to] ?? double.infinity)) {
         dist[e.to] = alt;

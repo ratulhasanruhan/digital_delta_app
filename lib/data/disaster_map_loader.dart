@@ -52,6 +52,7 @@ class DisasterMapData {
       edges: typedEdges,
       include: (e) {
         if (closedEdgeIds.contains(e.id)) return false;
+        if (e.isFlooded) return false;
         return vehicle.canUseEdgeMode(e.mode);
       },
       weightForEdge: (e) {
@@ -65,7 +66,7 @@ class DisasterMapData {
   RouteGraph graphAllModes({Map<String, double> onnxRiskByEdgeId = const {}}) {
     return buildRouteGraph(
       edges: typedEdges,
-      include: (e) => !closedEdgeIds.contains(e.id),
+      include: (e) => !closedEdgeIds.contains(e.id) && !e.isFlooded,
       weightForEdge: (e) {
         final onnx = onnxRiskByEdgeId[e.id] ?? 0;
         return e.effectiveMinutes(onnxImpassabilityProb: onnx);

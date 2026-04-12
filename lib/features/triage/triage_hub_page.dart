@@ -13,6 +13,19 @@ import '../../data/supply_repository.dart';
 import '../identity/services/identity_service.dart';
 import '../../routing/simple_route_planner.dart';
 
+Color _priorityAccent(CargoPriority p) {
+  switch (p) {
+    case CargoPriority.p0:
+      return const Color(0xFFB91C1C);
+    case CargoPriority.p1:
+      return const Color(0xFFEA580C);
+    case CargoPriority.p2:
+      return const Color(0xFFCA8A04);
+    case CargoPriority.p3:
+      return const Color(0xFF64748B);
+  }
+}
+
 /// M6 — SLA tiers, breach prediction, autonomous preemption log.
 class TriageHubPage extends StatefulWidget {
   const TriageHubPage({super.key});
@@ -64,51 +77,81 @@ class _TriageHubPageState extends State<TriageHubPage> {
               return const Center(child: CircularProgressIndicator());
             }
             final lines = linesSnap.data!;
+            final sortedLines = List<SupplyLine>.from(lines)
+              ..sort(
+                (a, b) =>
+                    a.priority.protoValue.compareTo(b.priority.protoValue),
+              );
 
             return RefreshIndicator(
               onRefresh: _reloadLines,
               child: ListView(
-              padding: UiTokens.pageInsets.copyWith(bottom: 28),
-              children: [
-                DdPageIntro(
-                  title: 'Priority & deadlines',
-                  description:
-                      'Tiers: P0 ≤2h · P1 ≤6h · P2 ≤24h · P3 ≤72h. If the convoy slows by about 30% or more, '
-                      'the app flags possible deadline breaches.',
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Route delay factor vs plan: ${((_slowdown - 1) * 100).round()}%',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                Slider(
-                  value: _slowdown,
-                  min: 1,
-                  max: 2,
-                  divisions: 20,
-                  label: '${((_slowdown - 1) * 100).round()}%',
-                  onChanged: (v) => setState(() => _slowdown = v),
-                ),
-                if (!id.role.can(Permission.triageOverride))
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(
-                      'Read-only: Camp Commander / Sync Admin can execute preemption.',
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+                padding: UiTokens.pageInsets.copyWith(bottom: 28),
+                children: [
+                  DdPageIntro(
+                    title: 'Priority & deadlines',
+                    description:
+                        'Tiers: P0 ≤2h · P1 ≤6h · P2 ≤24h · P3 ≤72h. If the convoy slows by about 30% or more, '
+                        'the app flags possible deadline breaches. Cargo is listed P0→P3 so critical lines stay on top.',
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final tier in CargoPriority.values)
+                        Chip(
+                          avatar: CircleAvatar(
+                            backgroundColor: _priorityAccent(tier),
+                            radius: 6,
+                          ),
+                          label: Text(
+                            '${tier.label} · SLA ${slaHoursForCargo(tier)}h',
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Route delay factor vs plan: ${((_slowdown - 1) * 100).round()}%',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  Slider(
+                    value: _slowdown,
+                    min: 1,
+                    max: 2,
+                    divisions: 20,
+                    label: '${((_slowdown - 1) * 100).round()}%',
+                    onChanged: (v) => setState(() => _slowdown = v),
+                  ),
+                  if (!id.role.can(Permission.triageOverride))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        'Read-only: Camp Commander / Sync Admin can execute preemption.',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
                     ),
+                  for (final tier in CargoPriority.values)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        slaLabel(tier),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Cargo SLA evaluation',
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
-                for (final tier in CargoPriority.values)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Text(slaLabel(tier), style: Theme.of(context).textTheme.bodySmall),
-                  ),
-                const SizedBox(height: 16),
-                Text('Cargo SLA evaluation', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                for (final line in lines)
-                  _lineCard(context, map, line, id),
-              ],
-            ),
+                  const SizedBox(height: 8),
+                  for (final line in sortedLines)
+                    _lineCard(context, map, line, id),
+                ],
+              ),
             );
           },
         );
@@ -143,49 +186,73 @@ class _TriageHubPageState extends State<TriageHubPage> {
             'eta_mins': etaMins,
             'sla_h': slaH,
             'slowdown': _slowdown,
-            'rationale': 'M6.2 — route ≥30% slower than plan and SLA window exceeded',
+            'rationale':
+                'M6.2 — route ≥30% slower than plan and SLA window exceeded',
           },
         ),
       );
     }
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      clipBehavior: Clip.antiAlias,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(line.description, style: Theme.of(context).textTheme.titleSmall),
-            Text('SKU ${line.sku} • ${line.priority.label}'),
-            Text(
-              'ETA ${etaMins.isFinite ? etaMins.toStringAsFixed(0) : "∞"} min vs SLA ${slaH}h '
-              '${breach ? "— BREACH" : "— ok"}',
-              style: TextStyle(
-                color: breach ? Theme.of(context).colorScheme.error : null,
-                fontWeight: FontWeight.w600,
+            Container(width: 5, color: _priorityAccent(line.priority)),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      line.description,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    Text('SKU ${line.sku} • ${line.priority.label}'),
+                    Text(
+                      'ETA ${etaMins.isFinite ? etaMins.toStringAsFixed(0) : "∞"} min vs SLA ${slaH}h '
+                      '${breach ? "— BREACH" : "— ok"}',
+                      style: TextStyle(
+                        color: breach
+                            ? Theme.of(context).colorScheme.error
+                            : null,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (severeSlow &&
+                        breach &&
+                        id.role.can(Permission.triageOverride)) ...[
+                      const SizedBox(height: 8),
+                      FilledButton(
+                        onPressed: () async {
+                          await id.audit.append(
+                            event: 'preemption_drop_reroute',
+                            payload: {
+                              'sku': line.sku,
+                              'rationale':
+                                  'SLA breach with ≥30% slowdown — drop P2/P3 at waypoint, reroute P0/P1',
+                              'eta_mins': etaMins,
+                            },
+                          );
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Preemption logged to audit chain',
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        child: const Text('M6.3 Log drop-and-reroute decision'),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
-            if (severeSlow && breach && id.role.can(Permission.triageOverride)) ...[
-              const SizedBox(height: 8),
-              FilledButton(
-                onPressed: () async {
-                  await id.audit.append(
-                    event: 'preemption_drop_reroute',
-                    payload: {
-                      'sku': line.sku,
-                      'rationale': 'SLA breach with ≥30% slowdown — drop P2/P3 at waypoint, reroute P0/P1',
-                      'eta_mins': etaMins,
-                    },
-                  );
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Preemption logged to audit chain')),
-                    );
-                  }
-                },
-                child: const Text('M6.3 Log drop-and-reroute decision'),
-              ),
-            ],
           ],
         ),
       ),

@@ -16,7 +16,7 @@ class FloatingDisasterNav extends StatelessWidget {
     _NavSpec(Icons.dashboard_rounded, 'Home'),
     _NavSpec(Icons.inventory_2_rounded, 'Supplies'),
     _NavSpec(Icons.flight_takeoff_rounded, 'Drone'),
-    _NavSpec(Icons.local_hospital_rounded, 'Hospital'),
+    _NavSpec(Icons.layers_rounded, 'Risk'),
   ];
 
   @override

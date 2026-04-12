@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+/// How two vector clocks relate (M2.2 causal ordering).
+enum CausalRelation { before, after, concurrent, equivalent }
+
 /// Per-replica Lamport-style counters (aligns with `proto/digitaldelta/v1/common.proto` VectorClock).
 class VectorClock {
   VectorClock([Map<String, int>? components])
@@ -23,6 +26,27 @@ class VectorClock {
       out[e.key] = (out[e.key] ?? 0) < e.value ? e.value : out[e.key]!;
     }
     return VectorClock(out);
+  }
+
+  /// True if this clock is ≥ [other] at every replica (classic vector-clock partial order).
+  bool dominates(VectorClock other) {
+    final keys = {..._c.keys, ...other._c.keys};
+    for (final k in keys) {
+      final a = _c[k] ?? 0;
+      final b = other._c[k] ?? 0;
+      if (a < b) return false;
+    }
+    return true;
+  }
+
+  /// Causal relation for M2.2 demos (A vs B).
+  CausalRelation causalCompare(VectorClock other) {
+    final aDom = dominates(other);
+    final bDom = other.dominates(this);
+    if (aDom && bDom) return CausalRelation.equivalent;
+    if (aDom) return CausalRelation.after;
+    if (bDom) return CausalRelation.before;
+    return CausalRelation.concurrent;
   }
 
   String toJsonString() => jsonEncode(_c);

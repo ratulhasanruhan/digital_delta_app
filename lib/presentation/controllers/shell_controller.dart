@@ -8,7 +8,7 @@ class ShellController extends GetxController {
     'Dashboard',
     'Relief supplies',
     'Drone ops',
-    'Field hospital',
+    'Road risk',
   ];
 
   String get title =>

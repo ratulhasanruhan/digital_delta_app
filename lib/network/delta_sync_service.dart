@@ -47,6 +47,7 @@ class DeltaSyncGrpcService extends DeltaSyncServiceBase {
     grpc.ServiceCall call,
     sync_pb.SyncCursor request,
   ) async* {
-    yield await _repo.buildExportChunk();
+    final wm = request.hasSince() ? request.since : pb.VectorClock();
+    yield await _repo.buildDeltaChunkSince(wm);
   }
 }

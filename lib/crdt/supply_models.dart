@@ -1,3 +1,5 @@
+import 'vector_clock.dart';
+
 /// Cargo tier (maps to `CargoPriority` in proto).
 enum CargoPriority {
   p0(1, 'P0 critical'),
@@ -27,6 +29,7 @@ class SupplyLine {
     required this.quantity,
     required this.priority,
     required this.locationNodeId,
+    this.causalClock,
   });
 
   final String elementId;
@@ -36,4 +39,7 @@ class SupplyLine {
   final int quantity;
   final CargoPriority priority;
   final String locationNodeId;
+
+  /// Vector clock at the time this add was applied (M2.2).
+  final VectorClock? causalClock;
 }

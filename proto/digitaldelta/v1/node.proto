@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package digitaldelta.v1;
+
+// NodeService — field apps / mesh; admin uses REST on the HTTP server.
+service NodeService {
+  rpc Ping(PingRequest) returns (PingResponse);
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+message PingRequest {
+  string client_version = 1;
+}
+
+message PingResponse {
+  string server_version = 1;
+  int64 server_time_unix_ms = 2;
+  string authenticated_user_id = 3;
+  string authenticated_email = 4;
+  string role = 5;
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+}

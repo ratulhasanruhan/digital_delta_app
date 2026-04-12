@@ -4,11 +4,14 @@ import 'dart:math' as math;
 import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
 import '../../app/ui_tokens.dart';
+import '../../core/rbac.dart';
 import '../../widgets/dd_page_intro.dart';
 import '../../data/disaster_map_loader.dart';
+import '../pod/pod_service.dart';
 import '../../domain/vehicle_profile.dart';
 import '../../routing/simple_route_planner.dart';
 
@@ -57,43 +60,62 @@ class _FleetHubPageState extends State<FleetHubPage> {
           padding: UiTokens.pageInsets.copyWith(bottom: 28),
           children: [
             DdPageIntro(
-              title: 'Fleet & handoff',
+              title: 'Fleet & handoff (M8)',
               description:
-                  'Trucks follow roads; boats follow rivers. Places neither can reach are marked for drone or other air support.',
+                  'Trucks follow roads; boats follow rivers. Places neither can reach are marked for drone or other air support. '
+                  'M8.2 shows three Weiszfeld rendezvous points on live node coordinates; M8.3 runs a signed PoD into the CRDT supply ledger.',
             ),
             const SizedBox(height: 16),
             _reachabilitySection(context, map, nodes),
             const SizedBox(height: 24),
             Text(
-              'Meet point (demo)',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              'M8.2 — rendezvous scenarios (Weiszfeld median)',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             Text(
-              _rendezvousText(map),
-              style: Theme.of(context).textTheme.bodyMedium,
+              'Weighted geometric median minimizes sum of weighted great‑circle distances to the chosen nodes (same math as the single demo, now on three named triplets).',
+              style: Theme.of(context).textTheme.bodySmall,
             ),
+            const SizedBox(height: 10),
+            ..._m8ScenarioCards(context, map),
             const SizedBox(height: 24),
             Text(
-              'Boat → drone handoff',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              'M8.3 — boat → drone PoD + CRDT ledger',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             Text(
-              'Use Proof of delivery when the boat hands off to the drone team — same signing flow as other QR handoffs.',
+              'Builds a signed challenge, verifies payload hash + nonce, countersigns, and appends a POD receipt row to the supply OR‑set (same path as other deliveries). Requires writeSupply.',
               style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 10),
+            FilledButton.icon(
+              onPressed: _runBoatDroneHandoff,
+              icon: const Icon(Icons.verified_rounded),
+              label: const Text('Run boat→drone handoff (demo)'),
             ),
             const SizedBox(height: 24),
             Text(
               'Battery & broadcast pace',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             FutureBuilder<int>(
               future: _battery.batteryLevel,
               builder: (context, bat) {
                 final level = bat.data ?? 0;
-                var intervalSec = level < 20 ? 120 : level < 50 ? 60 : 20;
+                var intervalSec = level < 20
+                    ? 120
+                    : level < 50
+                    ? 60
+                    : 20;
                 if (_accelMag > 12) {
                   intervalSec += 30;
                 }
@@ -108,6 +130,81 @@ class _FleetHubPageState extends State<FleetHubPage> {
         );
       },
     );
+  }
+
+  Future<void> _runBoatDroneHandoff() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final pod = context.read<PodService>();
+    const payload =
+        '{"handoff":"boat_to_drone","demo":"M8.3","ts":"2026-04-13"}';
+    final id = 'M8-HANDOFF-${DateTime.now().millisecondsSinceEpoch}';
+    try {
+      final ch = await pod.buildChallenge(deliveryId: id, payloadUtf8: payload);
+      final err = await pod.finalizeDelivery(ch: ch, cargoPayloadUtf8: payload);
+      if (!mounted) return;
+      if (err != null) {
+        messenger.showSnackBar(SnackBar(content: Text('PoD: $err')));
+      } else {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'PoD challenge verified; receipt appended to CRDT supply ledger.',
+            ),
+          ),
+        );
+      }
+    } on RbacDeniedException catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('Need writeSupply permission: $e')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  List<Widget> _m8ScenarioCards(BuildContext context, DisasterMapData map) {
+    final n = map.nodeLatLng;
+    final scenarios = <({String name, List<(LatLng, double)> pts})>[
+      (
+        name: 'A · Camp supply run (N3 camp, N2 air hub, N6 hospital)',
+        pts: [(n['N3']!, 1.2), (n['N2']!, 1.0), (n['N6']!, 1.0)],
+      ),
+      (
+        name: 'B · Eastern corridor (N1 hub, N4 outpost, N5 waypoint)',
+        pts: [(n['N1']!, 1.0), (n['N4']!, 1.1), (n['N5']!, 0.9)],
+      ),
+      (
+        name: 'C · Cross-mode triage (N2, N4, N6)',
+        pts: [(n['N2']!, 1.0), (n['N4']!, 1.0), (n['N6']!, 1.0)],
+      ),
+    ];
+    return scenarios.map((s) {
+      final meet = _weiszfeld(s.pts);
+      return Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                s.name,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Weiszfeld geometric median: ${_fmt(meet)}',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
+          ),
+        ),
+      );
+    }).toList();
   }
 
   Widget _reachabilitySection(
@@ -134,40 +231,33 @@ class _FleetHubPageState extends State<FleetHubPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Unreachable by truck from $start', style: Theme.of(context).textTheme.titleSmall),
+        Text(
+          'Unreachable by truck from $start',
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
         Text(truckUnreachable.isEmpty ? '—' : truckUnreachable.join(', ')),
         const SizedBox(height: 8),
-        Text('Unreachable by boat from $start', style: Theme.of(context).textTheme.titleSmall),
+        Text(
+          'Unreachable by boat from $start',
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
         Text(boatUnreachable.isEmpty ? '—' : boatUnreachable.join(', ')),
         const SizedBox(height: 8),
-        Text('Drone-required (neither)', style: Theme.of(context).textTheme.titleSmall),
+        Text(
+          'Drone-required (neither)',
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
         Text(
           droneOnly.isEmpty ? '—' : droneOnly.join(', '),
           style: TextStyle(
-            color: droneOnly.isEmpty ? null : Theme.of(context).colorScheme.primary,
+            color: droneOnly.isEmpty
+                ? null
+                : Theme.of(context).colorScheme.primary,
             fontWeight: FontWeight.w600,
           ),
         ),
       ],
     );
-  }
-
-  String _rendezvousText(DisasterMapData map) {
-    final boat = map.nodeLatLng['N3'];
-    final base = map.nodeLatLng['N2'];
-    final dest = map.nodeLatLng['N6'];
-    if (boat == null || base == null || dest == null) {
-      return 'Missing nodes for demo triplet.';
-    }
-    final meet = _weiszfeld(
-      [
-        (boat, 1.2),
-        (base, 1.0),
-        (dest, 1.0),
-      ],
-    );
-    return 'Boat@${_fmt(boat)} • Drone base@${_fmt(base)} • Dest@${_fmt(dest)}\n'
-        'Weiszfeld rendezvous (weighted Fermat–Weber): ${_fmt(meet)}';
   }
 
   /// M8.2 — iterative geometric median (minimizes sum of weighted distances).

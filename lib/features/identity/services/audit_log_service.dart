@@ -89,26 +89,43 @@ CREATE TABLE audit_chain (
 
   /// Recompute chain; false if any row was edited or ordering broke.
   Future<bool> verifyIntegrity() async {
+    final reason = await integrityFailureReason();
+    return reason == null;
+  }
+
+  /// When the chain is invalid, explains why (for demos / debugging). Null if OK.
+  Future<String?> integrityFailureReason() async {
     await init();
     final rows = await _database.query('audit_chain', orderBy: 'id ASC');
     var expectedPrev = _genesis;
     for (final r in rows) {
+      final id = r['id'] as int;
       final prev = r['prev_hash']! as String;
       final ts = r['ts']! as int;
       final event = r['event']! as String;
       final payload = r['payload']! as String;
       final stored = r['row_hash']! as String;
-      if (prev != expectedPrev) return false;
+      if (prev != expectedPrev) {
+        return 'Broken link at row #$id: prev_hash does not match previous row tip (chain order or prev tampered).';
+      }
       final h = _computeRowHash(
         prevHash: prev,
         ts: ts,
         event: event,
         payload: payload,
       );
-      if (h != stored) return false;
+      if (h != stored) {
+        return 'Row #$id fails SHA-256 check: recomputed ${h.substring(0, 12)}… ≠ stored ${stored.substring(0, 12)}… (payload or fields tampered).';
+      }
       expectedPrev = stored;
     }
-    return true;
+    return null;
+  }
+
+  /// Tip of the chain (empty log → genesis).
+  Future<String> chainTipHash() async {
+    await init();
+    return _lastRowHash();
   }
 
   /// Demo hook: corrupt newest row to show detection (do not use in prod).

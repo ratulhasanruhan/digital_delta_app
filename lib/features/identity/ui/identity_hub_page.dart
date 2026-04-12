@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 
 import '../../../app/ui_tokens.dart';
 import '../../../widgets/dd_page_intro.dart';
+import '../../../widgets/hub_backend_card.dart';
+import '../../pod/pod_hub_page.dart';
 import '../../../core/rbac.dart';
 import '../../../data/supply_repository.dart';
 import '../services/identity_service.dart';
@@ -54,6 +56,35 @@ class _IdentityHubPageState extends State<IdentityHubPage> {
     return '$ts';
   }
 
+  String _shortHash(Object? rowHash) {
+    final s = rowHash?.toString() ?? '';
+    if (s.length <= 10) return s;
+    return '${s.substring(0, 10)}…';
+  }
+
+  String _auditEventLabel(String event) {
+    switch (event) {
+      case 'login_success':
+        return 'Login success';
+      case 'otp_failure':
+        return 'OTP failure';
+      case 'signing_keys_rotated':
+        return 'Key rotation (Ed25519)';
+      case 'keypair_provisioned':
+        return 'Keypair provisioned';
+      case 'totp_secret_provisioned':
+        return 'TOTP secret provisioned';
+      case 'role_changed':
+        return 'Role changed';
+      case 'hotp_counter_advanced':
+        return 'HOTP counter advanced';
+      case 'manual_verify':
+        return 'Manual test event';
+      default:
+        return event;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final id = context.watch<IdentityService>();
@@ -79,6 +110,28 @@ class _IdentityHubPageState extends State<IdentityHubPage> {
               '• Your key — a long id used for signing; others never need to type it by hand.',
         ),
         const SizedBox(height: 16),
+        const HubBackendCard(),
+        const SizedBox(height: 12),
+        Card(
+          child: ListTile(
+            leading: Icon(Icons.verified_user_rounded, color: cs.primary),
+            title: Text(
+              'Proof of delivery (Module 5)',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            subtitle: Text(
+              'Signed QR handoff — works fully offline. Needs a role that can write supplies for the ledger.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () {
+              Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(builder: (_) => const PodHubPage()),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -348,75 +401,142 @@ class _IdentityHubPageState extends State<IdentityHubPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Activity log (tamper check)',
+                  'Audit trail (M1.4 — hash chain)',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                 ),
+                const SizedBox(height: 6),
+                Text(
+                  'Every login, OTP failure, key rotation, and other security events is appended locally. '
+                  'Each row stores SHA-256(prev_hash | ts | event | payload); change any field and verification fails.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
                 const SizedBox(height: 12),
-                FutureBuilder<bool>(
-                  key: ValueKey(_auditRefresh),
-                  future: id.audit.verifyIntegrity(),
+                FutureBuilder<String?>(
+                  key: ValueKey('${_auditRefresh}_reason'),
+                  future: id.audit.integrityFailureReason(),
                   builder: (context, snap) {
-                    final ok = snap.data;
-                    if (ok == null) {
+                    if (!snap.hasData && snap.connectionState != ConnectionState.done) {
                       return const LinearProgressIndicator();
                     }
-                    return Row(
+                    final reason = snap.data;
+                    final ok = reason == null;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Icon(
-                          ok ? Icons.check_circle : Icons.error,
-                          color: ok ? cs.primary : cs.error,
+                        Row(
+                          children: [
+                            Icon(
+                              ok ? Icons.verified_outlined : Icons.warning_amber_rounded,
+                              color: ok ? cs.primary : cs.error,
+                              size: 28,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                ok ? 'Chain OK — log is tamper-evident' : 'Tampering detected',
+                                style: TextStyle(
+                                  color: ok ? cs.onSurface : cs.error,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            ok ? 'Log looks intact' : 'Problem detected in log',
+                        if (!ok) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            reason,
                             style: TextStyle(
-                              color: ok ? cs.onSurface : cs.error,
-                              fontWeight: FontWeight.w600,
+                              color: cs.error,
+                              fontSize: 12,
+                              height: 1.35,
                             ),
                           ),
-                        ),
+                        ],
                       ],
                     );
                   },
                 ),
+                const SizedBox(height: 8),
+                FutureBuilder<String>(
+                  key: ValueKey('${_auditRefresh}_tip'),
+                  future: id.audit.chainTipHash(),
+                  builder: (context, snap) {
+                    final tip = snap.data;
+                    if (tip == null || tip.isEmpty) return const SizedBox.shrink();
+                    final short = tip.length > 12 ? '${tip.substring(0, 12)}…' : tip;
+                    return Text(
+                      'Chain tip: $short',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            fontFamily: 'monospace',
+                          ),
+                    );
+                  },
+                ),
                 const SizedBox(height: 12),
-                ExpansionTile(
-                  title: const Text('Technical checks (judges)'),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    Row(
-                      children: [
-                        FilledButton.tonal(
-                          onPressed: () async {
-                            await id.audit.injectCorruptionInLatestRow();
-                            _bumpAudit();
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Test: damaged last row')),
-                              );
-                            }
-                          },
-                          child: const Text('Simulate tamper'),
-                        ),
-                        const SizedBox(width: 12),
-                        OutlinedButton(
-                          onPressed: () async {
-                            await id.audit.append(
-                              event: 'manual_verify',
-                              payload: {'source': 'identity_hub'},
-                            );
-                            _bumpAudit();
-                          },
-                          child: const Text('Add test event'),
-                        ),
-                      ],
+                    FilledButton.tonalIcon(
+                      onPressed: () async {
+                        await id.audit.injectCorruptionInLatestRow();
+                        _bumpAudit();
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text(
+                              'Injected corruption: last row payload altered. Tap “Verify” — chain should fail.',
+                            ),
+                            backgroundColor: cs.errorContainer,
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.bug_report_outlined, size: 20),
+                      label: const Text('Inject log corruption (demo)'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final ok = await id.audit.verifyIntegrity();
+                        if (!context.mounted) return;
+                        _bumpAudit();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(ok ? 'verifyIntegrity(): true' : 'verifyIntegrity(): false'),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.fact_check_outlined, size: 20),
+                      label: const Text('Re-verify chain'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        await id.audit.append(
+                          event: 'manual_verify',
+                          payload: {'source': 'identity_hub'},
+                        );
+                        _bumpAudit();
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Appended valid event — tip hash updated')),
+                        );
+                      },
+                      icon: const Icon(Icons.add_circle_outline, size: 20),
+                      label: const Text('Append test event'),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
+                Text(
+                  'Recent events',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 6),
                 FutureBuilder<List<Map<String, Object?>>>(
                   key: ValueKey(_auditRefresh),
-                  future: id.audit.recent(limit: 12),
+                  future: id.audit.recent(limit: 16),
                   builder: (context, snap) {
                     final rows = snap.data;
                     if (rows == null) {
@@ -426,11 +546,15 @@ class _IdentityHubPageState extends State<IdentityHubPage> {
                       children: [
                         for (final r in rows)
                           ListTile(
+                            contentPadding: EdgeInsets.zero,
                             dense: true,
-                            title: Text('${r['event']}', style: TextStyle(color: cs.onSurface)),
+                            title: Text(
+                              _auditEventLabel('${r['event']}'),
+                              style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
+                            ),
                             subtitle: Text(
-                              _formatAuditTime(r['ts']),
-                              style: TextStyle(color: cs.onSurfaceVariant),
+                              '${_formatAuditTime(r['ts'])} · ${_shortHash(r['row_hash'])}',
+                              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11),
                             ),
                           ),
                       ],

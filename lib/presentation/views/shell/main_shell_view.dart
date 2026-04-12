@@ -8,8 +8,8 @@ import '../../controllers/auth_controller.dart';
 import '../../controllers/shell_controller.dart';
 import '../dashboard/dashboard_view.dart';
 import '../drone/drone_ops_view.dart';
-import '../hospital/field_hospital_view.dart';
 import '../supplies/relief_supplies_view.dart';
+import '../../../features/risk/ml_road_risk_hub_page.dart';
 
 /// Floating bottom nav + tab bodies (GetX [ShellController]).
 class MainShellView extends GetView<ShellController> {
@@ -36,7 +36,7 @@ class MainShellView extends GetView<ShellController> {
                   AlertDialog(
                     title: const Text('Sign out?'),
                     content: const Text(
-                      'You can sign in again with OTP on this device.',
+                      'You can sign in again with TOTP on this device.',
                     ),
                     actions: [
                       TextButton(
@@ -85,7 +85,7 @@ class MainShellView extends GetView<ShellController> {
                     DashboardView(),
                     ReliefSuppliesView(),
                     DroneOpsView(),
-                    FieldHospitalView(),
+                    MlRoadRiskHubPage(),
                   ],
                 ),
               ),

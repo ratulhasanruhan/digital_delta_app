@@ -29,7 +29,8 @@ Future<sync_pb.SyncAck> pushSupplyToPeer({
     if (!hs.accepted) {
       throw StateError('Handshake rejected: ${hs.rejectReason}');
     }
-    final chunk = await repo.buildExportChunk();
+    // Peer’s merged watermark: send only ops not already dominated by it (M2.4 delta).
+    final chunk = await repo.buildDeltaChunkSince(hs.watermark);
     final ack = await client.pushDeltas(Stream.value(chunk));
     return ack;
   } finally {

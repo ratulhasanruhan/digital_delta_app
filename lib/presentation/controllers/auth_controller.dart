@@ -3,16 +3,18 @@ import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/routes/app_routes.dart';
+import '../../features/identity/services/identity_service.dart';
 import 'shell_controller.dart';
 
 const _kLoggedIn = 'dd_auth_session_v3';
 const _kPhone = 'dd_auth_phone_v3';
 
-/// Offline-first auth: phone + OTP persisted locally.
-/// Demo OTP: **123456**.
+/// Offline-first auth: phone + **TOTP** (RFC 6238, SHA-256) verified locally — no server.
 class AuthController extends GetxController {
   final RxBool isLoggedIn = false.obs;
   final RxnString phoneDisplay = RxnString();
+
+  IdentityService get _identity => Get.find<IdentityService>();
 
   Future<void> loadFromStorage() async {
     try {
@@ -34,8 +36,8 @@ class AuthController extends GetxController {
     required String otp,
   }) async {
     try {
-      final normalized = otp.trim();
-      if (normalized != '123456') {
+      if (!_identity.verifyTotpInput(otp)) {
+        await _identity.logOtpFailure();
         return false;
       }
       final p = await SharedPreferences.getInstance();
@@ -43,6 +45,7 @@ class AuthController extends GetxController {
       await p.setString(_kPhone, phoneDigits.trim());
       isLoggedIn.value = true;
       phoneDisplay.value = phoneDigits.trim();
+      await _identity.logLoginSuccess();
       Get.offAllNamed<void>(AppRoutes.home);
       return true;
     } catch (e) {
