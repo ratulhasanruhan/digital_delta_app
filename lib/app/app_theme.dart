@@ -99,7 +99,11 @@ abstract final class AppTheme {
       chipTheme: ChipThemeData(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         side: BorderSide(color: cs.outline.withValues(alpha: 0.35)),
-        labelStyle: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w500),
+        labelStyle: GoogleFonts.dmSans(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: cs.onSurfaceVariant,
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       ),
       listTileTheme: ListTileThemeData(
@@ -238,7 +242,11 @@ abstract final class AppTheme {
       chipTheme: ChipThemeData(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         side: BorderSide(color: cs.outline.withValues(alpha: 0.4)),
-        labelStyle: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w500),
+        labelStyle: GoogleFonts.dmSans(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: cs.onSurfaceVariant,
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       ),
       listTileTheme: ListTileThemeData(
