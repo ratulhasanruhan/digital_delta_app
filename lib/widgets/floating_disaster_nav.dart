@@ -30,7 +30,6 @@ class FloatingDisasterNav extends StatelessWidget {
         color: cs.surface.withValues(alpha: 0.96),
         elevation: 10,
         shadowColor: cs.shadow.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(30),
         clipBehavior: Clip.antiAlias,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
@@ -78,12 +77,8 @@ class _NavCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final pillColor = selected
-        ? Color.alphaBlend(
-            cs.primary.withValues(alpha: 0.14),
-            cs.primaryContainer.withValues(alpha: 0.75),
-          )
-        : Colors.transparent;
+    final selectedPill = cs.primary;
+    final selectedFg = cs.onPrimary;
 
     return InkWell(
       onTap: onTap,
@@ -93,25 +88,16 @@ class _NavCell extends StatelessWidget {
         curve: Curves.easeOutCubic,
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: pillColor,
+          color: selected ? selectedPill : Colors.transparent,
           borderRadius: BorderRadius.circular(22),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: selected ? cs.primary.withValues(alpha: 0.12) : Colors.transparent,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                spec.icon,
-                size: selected ? 24 : 22,
-                color: selected ? cs.primary : cs.onSurfaceVariant,
-              ),
+            Icon(
+              spec.icon,
+              size: 26,
+              color: selected ? selectedFg : cs.onSurfaceVariant,
             ),
             const SizedBox(height: 4),
             Text(
@@ -120,9 +106,9 @@ class _NavCell extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.dmSans(
                 fontSize: 11,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                fontWeight: FontWeight.w700,
                 letterSpacing: -0.2,
-                color: selected ? cs.primary : cs.onSurfaceVariant,
+                color: selected ? selectedFg : cs.onSurfaceVariant,
               ),
             ),
           ],
