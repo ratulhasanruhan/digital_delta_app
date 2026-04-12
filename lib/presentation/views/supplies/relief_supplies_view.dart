@@ -191,10 +191,10 @@ class _ReliefSuppliesViewState extends State<ReliefSuppliesView> {
             slivers: [
               SliverPadding(
                 padding: UiTokens.pageInsets.copyWith(top: 0),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
+                sliver: SliverList.list(
+                  children: [
                     FutureBuilder<VectorClock>(
-                      key: ValueKey(_gen),
+                      key: const ValueKey('clock'),
                       future: repo.currentClock(),
                       builder: (context, snap) {
                         final vc = snap.data;
@@ -290,7 +290,7 @@ class _ReliefSuppliesViewState extends State<ReliefSuppliesView> {
                     ),
                     const SizedBox(height: 6),
                     FutureBuilder<List<SupplyLine>>(
-                      key: ValueKey(_gen),
+                      key: const ValueKey('lines'),
                       future: repo.visibleLines(),
                       builder: (context, snap) {
                         final lines = snap.data ?? [];
@@ -360,7 +360,7 @@ class _ReliefSuppliesViewState extends State<ReliefSuppliesView> {
                       ],
                     ),
                     FutureBuilder<List<CrdtConflict>>(
-                      key: ValueKey(_gen),
+                      key: const ValueKey('conflicts'),
                       future: repo.pendingConflicts(),
                       builder: (context, snap) {
                         final list = snap.data ?? [];
@@ -415,7 +415,7 @@ class _ReliefSuppliesViewState extends State<ReliefSuppliesView> {
                       style: GoogleFonts.dmSans(fontSize: 11, color: cs.onSurfaceVariant, height: 1.35),
                     ),
                     const SizedBox(height: 24),
-                  ]),
+                  ],
                 ),
               ),
             ],

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:provider/provider.dart';
 
 import '../presentation/controllers/hub_session_controller.dart';
 
@@ -19,14 +19,25 @@ class _HubBackendCardState extends State<HubBackendCard> {
   late final TextEditingController _grpcHost;
   late final TextEditingController _grpcPort;
   late final TextEditingController _jwt;
+  bool _seeded = false;
 
   @override
   void initState() {
     super.initState();
-    final h = Get.find<HubSessionController>();
-    _grpcHost = TextEditingController(text: h.grpcHost.value ?? '');
-    _grpcPort = TextEditingController(text: '${h.grpcPort.value}');
-    _jwt = TextEditingController(text: h.accessToken.value ?? '');
+    _grpcHost = TextEditingController();
+    _grpcPort = TextEditingController();
+    _jwt = TextEditingController();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_seeded) return;
+    _seeded = true;
+    final h = context.read<HubSessionController>();
+    _grpcHost.text = h.grpcHost ?? '';
+    _grpcPort.text = '${h.grpcPort}';
+    _jwt.text = h.accessToken ?? '';
   }
 
   @override
@@ -37,9 +48,12 @@ class _HubBackendCardState extends State<HubBackendCard> {
     super.dispose();
   }
 
+  void _snack(BuildContext context, String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
   @override
   Widget build(BuildContext context) {
-    final h = Get.find<HubSessionController>();
     final cs = Theme.of(context).colorScheme;
 
     return Card(
@@ -89,15 +103,17 @@ class _HubBackendCardState extends State<HubBackendCard> {
               autocorrect: false,
             ),
             const SizedBox(height: 12),
-            Obx(() {
-              final tok = h.accessToken.value;
-              return Text(
-                tok != null && tok.isNotEmpty
-                    ? 'JWT saved (${tok.length} chars)'
-                    : 'No JWT saved — Health still works',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-              );
-            }),
+            Consumer<HubSessionController>(
+              builder: (context, h, _) {
+                final tok = h.accessToken;
+                return Text(
+                  tok != null && tok.isNotEmpty
+                      ? 'JWT saved (${tok.length} chars)'
+                      : 'No JWT saved — Health still works',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                );
+              },
+            ),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
@@ -105,29 +121,30 @@ class _HubBackendCardState extends State<HubBackendCard> {
               children: [
                 FilledButton.tonal(
                   onPressed: () async {
+                    final h = context.read<HubSessionController>();
                     final port = int.tryParse(_grpcPort.text.trim());
                     await h.saveGrpc(
                       grpcHostValue: _grpcHost.text,
                       grpcPortValue: port,
                     );
-                    Get.snackbar('Hub', 'gRPC address saved');
+                    if (context.mounted) _snack(context, 'Hub: gRPC address saved');
                   },
                   child: const Text('Save gRPC'),
                 ),
                 FilledButton(
                   onPressed: () async {
-                    await h.saveAccessToken(_jwt.text);
-                    Get.snackbar('Hub', 'JWT saved');
+                    await context.read<HubSessionController>().saveAccessToken(_jwt.text);
+                    if (context.mounted) _snack(context, 'Hub: JWT saved');
                   },
                   child: const Text('Save JWT'),
                 ),
                 OutlinedButton(
                   onPressed: () async {
                     try {
-                      final s = await h.callHealth();
-                      Get.snackbar('gRPC Health', s);
+                      final s = await context.read<HubSessionController>().callHealth();
+                      if (context.mounted) _snack(context, 'gRPC Health: $s');
                     } catch (e) {
-                      Get.snackbar('Hub', '$e');
+                      if (context.mounted) _snack(context, 'Hub: $e');
                     }
                   },
                   child: const Text('Health'),
@@ -135,10 +152,10 @@ class _HubBackendCardState extends State<HubBackendCard> {
                 OutlinedButton(
                   onPressed: () async {
                     try {
-                      final s = await h.callPing();
-                      Get.snackbar('gRPC Ping', s);
+                      final s = await context.read<HubSessionController>().callPing();
+                      if (context.mounted) _snack(context, 'gRPC Ping: $s');
                     } catch (e) {
-                      Get.snackbar('Hub', '$e');
+                      if (context.mounted) _snack(context, 'Hub: $e');
                     }
                   },
                   child: const Text('Ping'),
@@ -146,8 +163,8 @@ class _HubBackendCardState extends State<HubBackendCard> {
                 TextButton(
                   onPressed: () async {
                     _jwt.clear();
-                    await h.clearToken();
-                    Get.snackbar('Hub', 'JWT cleared');
+                    await context.read<HubSessionController>().clearToken();
+                    if (context.mounted) _snack(context, 'Hub: JWT cleared');
                   },
                   child: const Text('Clear JWT'),
                 ),

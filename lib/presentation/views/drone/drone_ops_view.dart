@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../../../app/ui_tokens.dart';
 import '../../../crdt/supply_models.dart';
 import '../../../features/triage/triage_hub_page.dart';
 import '../../../widgets/dd_page_intro.dart';
 import '../../controllers/shell_controller.dart';
+
 import 'full_route_planner_page.dart';
 
 /// Drone & air ops — compact: routing opens full-screen; sorties in an expansion.
@@ -62,7 +63,8 @@ class DroneOpsView extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: FilledButton.tonalIcon(
-                      onPressed: () => Get.find<ShellController>().selectTab(3),
+                      onPressed: () =>
+                          context.read<ShellController>().selectTab(3),
                       icon: const Icon(Icons.layers_rounded),
                       label: Text(
                         'Road risk',

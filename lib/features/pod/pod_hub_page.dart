@@ -78,11 +78,10 @@ class _PodHubPageState extends State<PodHubPage> {
               );
               setState(() => _last = ch);
             } catch (e) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error: $e')),
-                );
-              }
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error: $e')),
+              );
             }
           },
           icon: const Icon(Icons.qr_code_2),
@@ -107,7 +106,7 @@ class _PodHubPageState extends State<PodHubPage> {
                 ch: _last!,
                 cargoPayloadUtf8: _payload.text,
               );
-              if (!mounted) return;
+              if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
@@ -127,7 +126,7 @@ class _PodHubPageState extends State<PodHubPage> {
                 ch: _last!,
                 cargoPayloadUtf8: _payload.text,
               );
-              if (!mounted) return;
+              if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('Replay: ${err ?? "unexpected ok"}')),
               );
@@ -164,20 +163,17 @@ class _PodHubPageState extends State<PodHubPage> {
                   _scanResult = ch == null ? 'Invalid QR' : 'Parsed delivery ${ch.deliveryId}';
                 });
                 if (ch != null) {
+                  final messenger = ScaffoldMessenger.of(context);
                   pod
                       .finalizeDelivery(
                         ch: ch,
                         cargoPayloadUtf8: _payload.text,
                       )
                       .then((err) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    if (!context.mounted) return;
+                    messenger.showSnackBar(
                       SnackBar(
-                        content: Text(
-                          err == null
-                              ? 'Scan: verified + ledger'
-                              : err,
-                        ),
+                        content: Text(err ?? 'Scan: verified + ledger'),
                       ),
                     );
                   });

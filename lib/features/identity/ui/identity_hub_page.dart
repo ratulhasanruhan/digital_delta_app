@@ -165,11 +165,10 @@ class _IdentityHubPageState extends State<IdentityHubPage> {
                   onPressed: () async {
                     await id.logLoginSuccess();
                     _bumpAudit();
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Saved to activity log')),
-                      );
-                    }
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Saved to activity log')),
+                    );
                   },
                   icon: const Icon(Icons.login),
                   label: const Text('Record “opened app” in log'),
@@ -205,11 +204,10 @@ class _IdentityHubPageState extends State<IdentityHubPage> {
                       ? null
                       : () async {
                           await Clipboard.setData(ClipboardData(text: currentPk));
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Copied')),
-                            );
-                          }
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Copied')),
+                          );
                         },
                   icon: const Icon(Icons.copy),
                   label: const Text('Copy key'),
@@ -221,17 +219,15 @@ class _IdentityHubPageState extends State<IdentityHubPage> {
                       try {
                         await id.rotateSigningKeys();
                         _bumpAudit();
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('New keys created; list below updates')),
-                          );
-                        }
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('New keys created; list below updates')),
+                        );
                       } catch (e) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('$e')),
-                          );
-                        }
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('$e')),
+                        );
                       }
                     },
                     icon: const Icon(Icons.key_off_outlined),
@@ -365,11 +361,10 @@ class _IdentityHubPageState extends State<IdentityHubPage> {
                         await id.advanceHotpCounter();
                         _bumpAudit();
                       } catch (e) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('$e')),
-                          );
-                        }
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('$e')),
+                        );
                       }
                     },
                     icon: const Icon(Icons.exposure_plus_1_outlined),
@@ -380,11 +375,10 @@ class _IdentityHubPageState extends State<IdentityHubPage> {
                     onPressed: () async {
                       await id.logOtpFailure();
                       _bumpAudit();
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Logged as failed attempt')),
-                        );
-                      }
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Logged as failed attempt')),
+                      );
                     },
                     child: const Text('Log a fake “wrong code” (demo)'),
                   ),

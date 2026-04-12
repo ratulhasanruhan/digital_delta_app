@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pinput/pinput.dart';
 import 'package:provider/provider.dart';
@@ -26,8 +25,6 @@ class _OtpLoginViewState extends State<OtpLoginView> {
   bool _busy = false;
   String? _error;
   Timer? _totpTicker;
-
-  AuthController get _auth => Get.find<AuthController>();
 
   @override
   void dispose() {
@@ -65,7 +62,7 @@ class _OtpLoginViewState extends State<OtpLoginView> {
     });
     try {
       final digits = _phone.text.replaceAll(RegExp(r'\D'), '');
-      final ok = await _auth.verifyOtp(
+      final ok = await context.read<AuthController>().verifyOtp(
         phoneDigits: digits,
         otp: _otp.text.trim(),
       );

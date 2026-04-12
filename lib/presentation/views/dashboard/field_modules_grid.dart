@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../../../app/app_theme.dart';
 import '../../../features/fleet/fleet_hub_page.dart';
@@ -22,11 +22,11 @@ class FieldModulesGrid extends StatelessWidget {
   }
 
   void _openSuppliesTab(BuildContext context) {
-    Get.find<ShellController>().selectTab(1);
+    context.read<ShellController>().selectTab(1);
   }
 
   void _openRoadRiskTab(BuildContext context) {
-    Get.find<ShellController>().selectTab(3);
+    context.read<ShellController>().selectTab(3);
   }
 
   @override

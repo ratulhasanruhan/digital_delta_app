@@ -1,8 +1,8 @@
-import 'package:get/get.dart';
+import 'package:flutter/foundation.dart';
 
-/// Bottom navigation + section title for the main shell.
-class ShellController extends GetxController {
-  final RxInt currentTab = 0.obs;
+/// Bottom navigation + section title for the main shell (Provider + [ChangeNotifier]).
+class ShellController extends ChangeNotifier {
+  int currentTab = 0;
 
   static const titles = <String>[
     'Dashboard',
@@ -12,12 +12,20 @@ class ShellController extends GetxController {
   ];
 
   String get title =>
-      currentTab.value >= 0 && currentTab.value < titles.length
-          ? titles[currentTab.value]
+      currentTab >= 0 && currentTab < titles.length
+          ? titles[currentTab]
           : 'Digital Delta';
 
   void selectTab(int index) {
     if (index < 0 || index >= titles.length) return;
-    currentTab.value = index;
+    if (currentTab == index) return;
+    currentTab = index;
+    notifyListeners();
+  }
+
+  /// Called on sign-out so the next session opens on Dashboard.
+  void reset() {
+    currentTab = 0;
+    notifyListeners();
   }
 }

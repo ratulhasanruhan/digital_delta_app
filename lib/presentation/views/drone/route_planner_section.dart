@@ -36,12 +36,17 @@ class _RoutePlannerSectionState extends State<RoutePlannerSection> {
   MultiModalPathResult? _multiPath;
   int? _lastComputeMs;
   final MapController _mapCtl = MapController();
-  bool _riskPrimed = false;
 
   @override
   void initState() {
     super.initState();
     _mapFut = DisasterMapData.load();
+    unawaited(
+      _mapFut!.then((map) {
+        if (!mounted) return;
+        context.read<RouteRiskController>().recompute(map);
+      }),
+    );
   }
 
   Future<void> _compute(DisasterMapData map) async {
@@ -152,13 +157,6 @@ class _RoutePlannerSectionState extends State<RoutePlannerSection> {
           );
         }
         final map = snap.data!;
-        if (!_riskPrimed) {
-          _riskPrimed = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            context.read<RouteRiskController>().recompute(map);
-          });
-        }
 
         return Consumer<RouteRiskController>(
           builder: (context, risk, _) {
