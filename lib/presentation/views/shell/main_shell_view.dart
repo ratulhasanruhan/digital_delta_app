@@ -28,6 +28,7 @@ class MainShellView extends StatelessWidget {
               shell.title,
               style: GoogleFonts.dmSans(fontWeight: FontWeight.w700),
             ),
+            automaticallyImplyLeading: false,
             actions: [
               IconButton(
                 tooltip: 'Sign out',
