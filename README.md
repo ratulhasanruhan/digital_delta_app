@@ -2,6 +2,8 @@
 
 Flutter field client: works offline; can hit the Go hub when you have a network.
 
+This app uses ONNX Runtime for on-device ML inference (for example, edge risk scoring).
+
 ```bash
 flutter pub get
 flutter run
