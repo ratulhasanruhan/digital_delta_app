@@ -69,6 +69,8 @@
 	<string>Scan QR codes for proof-of-delivery verification.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Digital Delta uses Bluetooth Low Energy for proximity discovery of nearby mesh peers. Bulk sync uses Wi‑Fi.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Motion data adjusts BLE beacon duty when the device is stationary (M8.4 mesh policy).</string>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
